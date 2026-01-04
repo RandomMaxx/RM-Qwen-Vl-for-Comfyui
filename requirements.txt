@@ -1,0 +1,25 @@
+# --- Core Inference Engine ---
+# Updated to ensure Qwen2.5/Qwen3-VL architecture support
+transformers>=4.46.0
+accelerate>=0.30.0
+
+# --- Qwen-VL Specific Utilities ---
+# Required for handling resolution and vision info processing
+qwen-vl-utils>=0.0.4
+
+# --- Quantization & Memory ---
+# Required for '4bit' and '8bit' loading in Transformers backend
+# Note: Windows users might need 'bitsandbytes-windows' if this fails
+bitsandbytes>=0.43.0
+
+# --- GGUF / Llama.cpp Support ---
+# Bumped to 0.3.20+ to support 'Qwen25VLChatHandler' used in the code
+llama-cpp-python>=0.3.20
+
+# --- Model Management ---
+huggingface-hub>=0.23.0
+protobuf>=3.20.0
+
+# --- Optional / System (Implicit in ComfyUI but listed for safety) ---
+# flash-attn>=2.5.0  # Uncomment if you have a build environment for Flash Attention 2
+six>=1.16.0
