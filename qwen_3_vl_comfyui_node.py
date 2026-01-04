@@ -579,6 +579,17 @@ class Qwen3VL_ModelLoader:
         if not model_path.exists():
             raise FileNotFoundError(f"Local model folder '{model_name}' not found. Auto-download is disabled.")
 
+        # --- AUTO-ATTENTION SAFEGUARD ---
+        if attention == "auto":
+            try:
+                from transformers.utils import is_flash_attn_2_available
+                if not is_flash_attn_2_available():
+                    logger.info("⚠️ Flash Attention 2 not detected. Forcing 'sdpa' (Scaled Dot Product) to prevent crash.")
+                    attention = "sdpa"
+            except Exception:
+                # Safe fallback if verification fails
+                attention = "sdpa"
+
         quant_config = None
         if quantization == "4bit":
             quant_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
