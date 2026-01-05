@@ -179,28 +179,30 @@ class Qwen_TextConcatenate:
 
 class Qwen_TextSave:
     """
-    Saves text to file with auto-indexing and existence checks.
+    Saves text to a local file using the high-performance Qwen-IO architecture.
+    Features: 
+    - Standardized Path/Subfolder logic (Absolute & Relative).
+    - Auto-Indexing vs Manual Indexing.
+    - Extension selection (.txt, .json, .md, etc).
+    - UI Feedback with Content Preview.
     """
+    
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
-        inputs = {
+        return {
             "required": {
-                # The name "input_count" MUST match the JS search
-                "input_count": ("INT", {"default": 2, "min": 1, "max": 12, "step": 1, "display": "number"}), 
-                "seperator": ("STRING", {"default": " ", "multiline": False}),
-                "clean_whitespace": ("BOOLEAN", {"default": True}),
-                "search": ("STRING", {"default": "", "multiline": False}),
-                "replace": ("STRING", {"default": "", "multiline": False}),
-                "use_regex": ("BOOLEAN", {"default": False}),
+                "text": ("STRING", {"forceInput": True}),
+                "path": ("STRING", {"default": "./output"}),
+                "filename": ("STRING", {"default": "output_text"}),
+                "extension": (["txt", "json", "md", "csv", "log", "yaml"], {"default": "txt"}),
+                "auto_index": ("BOOLEAN", {"default": True}),
+                "overwrite": ("BOOLEAN", {"default": False}),
             },
-            "optional": {}
+            "optional": {
+                "manual_index": ("INT", {"default": -1, "min": -1}),
+                "subfolder": ("STRING", {"default": ""}),
+            }
         }
-        
-        # Pre-define all slots so Python doesn't reject them before JS removes them
-        for i in range(1, 13):
-            inputs["optional"][f"text_{i}"] = ("STRING", {"forceInput": True})
-            
-        return inputs
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("saved_path",)
@@ -208,11 +210,18 @@ class Qwen_TextSave:
     CATEGORY = "Qwen-IO"
     OUTPUT_NODE = True
 
-    def save_text(self, text: str, path: str, filename: str, overwrite: bool, 
-                  auto_index: bool, manual_index: int = -1, subfolder: str = "") -> Dict[str, Any]:
+    def save_text(self, text: str, path: str, filename: str, extension: str, 
+                  auto_index: bool, overwrite: bool, 
+                  manual_index: int = -1, subfolder: str = "") -> Dict[str, Any]:
         
         clean_filename = sanitize_filename(filename)
-        base_dir = Path(path)
+        
+        # 1. Path Resolution (Matches Qwen_ImageSave)
+        if os.path.isabs(path):
+            base_dir = Path(path)
+        else:
+            base_dir = Path(os.getcwd()) / path
+
         if subfolder.strip():
             base_dir = base_dir / subfolder.strip()
         
@@ -221,27 +230,42 @@ class Qwen_TextSave:
         except OSError as e:
             return {"ui": {"text": [f"Error creating directory: {e}"]}, "result": ("",)}
 
-        index_suffix = ""
+        # 2. Indexing Logic
+        # We assume 'get_next_index' is defined in the global scope (same as Image node)
+        idx_suffix = ""
         if auto_index:
             idx = get_next_index(base_dir, clean_filename)
-            index_suffix = f"_{idx:05d}"
+            idx_suffix = f"_{idx:05d}"
         elif manual_index >= 0:
-            index_suffix = f"_{manual_index:05d}"
+            idx_suffix = f"_{manual_index:05d}"
         
-        full_path = base_dir / f"{clean_filename}{index_suffix}.txt"
+        full_path = base_dir / f"{clean_filename}{idx_suffix}.{extension}"
 
-        if not overwrite and full_path.exists() and not auto_index:
-             return {"ui": {"text": [f"⚠️ Skipped (Exists): {full_path}"]}, "result": (str(full_path),)}
+        # 3. Overwrite Protection
+        if not overwrite and full_path.exists():
+            # If explicit manual index was used and it exists, we warn and skip.
+            # If auto_index was used, get_next_index guarantees uniqueness, so this won't hit.
+            logger.warning(f"File exists and overwrite=False: {full_path}")
+            return {
+                "ui": {"text": [f"⚠️ Skipped (Exists): {full_path.name}"]}, 
+                "result": (str(full_path),)
+            }
 
+        # 4. Write to Disk
         try:
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(text)
         except IOError as e:
             return {"ui": {"text": [f"Error writing file: {e}"]}, "result": ("",)}
 
-        return {"ui": {"text": [f"Saved: {full_path}"]}, "result": (str(full_path),)}
+        # 5. UI Feedback
+        # Limit preview to avoid lagging the UI with massive strings
+        preview_len = 1000
+        preview_content = text[:preview_len] + "..." if len(text) > preview_len else text
+        display_text = f"Saved: {full_path}\n\n[Content Preview]:\n{preview_content}"
 
-# --- Main Node Class ---
+        return {"ui": {"text": [display_text]}, "result": (str(full_path),)}
+
 
 class Qwen_ImageSave:
     """
