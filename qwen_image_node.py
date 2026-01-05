@@ -238,9 +238,9 @@ class Qwen3VL_ImageLoader:
                 resized_img = img.resize((nw, nh), m)
                 resized_t = torch.from_numpy(np.array(resized_img, dtype=np.float32) / 255.0)[None,]
                 
-                return (resized_t, orig_t, nw, nh, selected_file, str(full_path), current_index)
+                return (resized_t, orig_t, nw, nh, selected_file, str(full_path.parent), current_index)
             
-            return (orig_t, orig_t, orig_w, orig_h, selected_file, str(full_path), current_index)
+            return (orig_t, orig_t, orig_w, orig_h, selected_file, str(full_path.parent), current_index)
 
     @classmethod
     def IS_CHANGED(cls, **kwargs): return float("NaN")
