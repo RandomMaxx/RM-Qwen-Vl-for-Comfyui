@@ -7,6 +7,7 @@ from .qwen_image_node import NODE_CLASS_MAPPINGS as IMAGE_CLASSES, NODE_DISPLAY_
 from .qwen_image_rescaler import NODE_CLASS_MAPPINGS as RESCALER_CLASSES, NODE_DISPLAY_NAME_MAPPINGS as RESCALER_NAMES
 from .qwen_3_vl_comfyui_node import NODE_CLASS_MAPPINGS as MODEL_CLASSES, NODE_DISPLAY_NAME_MAPPINGS as MODEL_NAMES
 from .qwen_manager_node import NODE_CLASS_MAPPINGS as MANAGER_CLASSES, NODE_DISPLAY_NAME_MAPPINGS as MANAGER_NAMES
+from .qwen_3_text_comfyui_node import NODE_CLASS_MAPPINGS as TEXT_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as TEXT_DISPLAY
 
 # Merge all mappings into the final exports
 NODE_CLASS_MAPPINGS = {
@@ -14,6 +15,7 @@ NODE_CLASS_MAPPINGS = {
     **RESCALER_CLASSES,
     **MODEL_CLASSES,
     **MANAGER_CLASSES,
+    **TEXT_MAPPINGS,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -21,6 +23,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **RESCALER_NAMES,
     **MODEL_NAMES,
     **MANAGER_NAMES,
+    **TEXT_DISPLAY,
 }
 
 # Registers the 'js' folder for frontend extensions (Javascript)
