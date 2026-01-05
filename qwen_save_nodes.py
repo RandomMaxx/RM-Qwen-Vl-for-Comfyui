@@ -1,75 +1,206 @@
 """
 Qwen Save Utilities - High Performance Edition
-Simple, robust nodes for Text/Image Saving and Viewing.
-Optimized for local file management without external bloat.
+COMPLETE SUITE: Date, Text, Image, Concatenation
+Optimized for: Local File Management, Metadata, Batch Processing, and Validation Safety.
 
 Optimized by: Principal Python Performance Engineer
 """
 
 import os
+import re
 import json
-import logging
-import numpy as np
 import torch
-from PIL import Image
+import numpy as np
+import logging
+from PIL import Image, PngImagePlugin
 from pathlib import Path
+from datetime import datetime
+from typing import Dict, Any, Tuple, List, Union
 
 # --- Logging Setup ---
 logger = logging.getLogger("QwenSave")
 
-class Qwen_TextView:
+# --- Helper Functions ---
+
+def get_next_index(directory: Path, filename_prefix: str) -> int:
     """
-    Simple node to preview text directly on the canvas.
-    Acts as a pass-through, so it can be placed anywhere in the chain.
+    Scans the directory for the highest existing index for a given prefix.
+    Returns the next available integer (1-based).
     """
+    max_idx = 0
+    if not directory.exists():
+        return 1
     
+    prefix_with_sep = f"{filename_prefix}_"
+    prefix_len = len(prefix_with_sep)
+
+    try:
+        # scandir is faster than listdir for large directories
+        for entry in os.scandir(directory):
+            if entry.is_file() and entry.name.startswith(prefix_with_sep):
+                stem = Path(entry.name).stem
+                suffix = stem[prefix_len:]
+                if suffix.isdigit():
+                    max_idx = max(max_idx, int(suffix))
+    except OSError as e:
+        logger.warning(f"Directory scan failed: {e}")
+        return 1
+        
+    return max_idx + 1
+
+def sanitize_filename(filename: str) -> str:
+    """Removes extensions and invalid characters from filenames."""
+    return Path(filename).stem
+
+# --- Node Classes ---
+
+class Qwen_DateGenerator:
+    """
+    Generates formatted date strings for path/filename organization.
+    """
+    FORMAT_MAP = {
+        "yyyy-mm-dd-hh-mm-ss": "%Y-%m-%d-%H-%M-%S",
+        "yyyy-mm-dd": "%Y-%m-%d",
+        "yy-mm-dd": "%y-%m-%d",
+        "yyyy_mm_dd": "%Y_%m_%d",
+        "hh-mm-ss": "%H-%M-%S",
+    }
+
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> Dict[str, Any]:
         return {
             "required": {
-                "text": ("STRING", {"forceInput": True}),
+                "preset_format": (list(cls.FORMAT_MAP.keys()), {"default": "yyyy-mm-dd"}),
+                "use_custom": ("BOOLEAN", {"default": False}),
+                "custom_format": ("STRING", {"default": "%Y/%m/%d"}),
             }
         }
 
     RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("text",)
-    FUNCTION = "view_text"
+    RETURN_NAMES = ("date_string",)
+    FUNCTION = "get_date"
     CATEGORY = "Qwen-IO"
-    OUTPUT_NODE = True
 
-    def view_text(self, text):
-        # We limit the preview to 5000 characters to prevent frontend lag
-        # if a massive text file is passed.
-        preview = text
-        if len(preview) > 5000:
-            preview = preview[:5000] + "\n... [Text Truncated for Performance]"
+    def get_date(self, preset_format: str, use_custom: bool, custom_format: str) -> Tuple[str]:
+        fmt = custom_format if use_custom else self.FORMAT_MAP.get(preset_format, "%Y-%m-%d")
+        try:
+            date_str = datetime.now().strftime(fmt)
+        except ValueError:
+            logger.error(f"Invalid date format '{fmt}'. Falling back to default.")
+            date_str = datetime.now().strftime("%Y-%m-%d")
+        return (date_str,)
 
-        return {"ui": {"text": [preview]}, "result": (text,)}
+
+
+class Qwen_TextConcatenate:
+    """
+    Advanced Text Concatenator - High Performance Edition
+    Features:
+    - Dynamic Integer Input (1-12 slots).
+    - Auto-generated slots via JS.
+    - Robust logic that safely ignores disconnected or hidden slots.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls) -> Dict[str, Any]:
+        inputs = {
+            "required": {
+                "input_count": ("INT", {"default": 2, "min": 1, "max": 4, "step": 1, "display": "number"}),
+                "seperator": ("STRING", {"default": " ", "multiline": False}),
+                "clean_whitespace": ("BOOLEAN", {"default": True, "tooltip": "Fixes spaces, removes ' . ' and deduplicates ',,' or '..'"}),
+                "search": ("STRING", {"default": "", "multiline": False}),
+                "replace": ("STRING", {"default": "", "multiline": False}),
+                "use_regex": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {}
+        }
+        
+        # Pre-define all possible slots (1-12) as optional.
+        # This allows the backend to accept them if the frontend provides them,
+        # but prevents errors if they are missing.
+        for i in range(1, 5):
+            inputs["optional"][f"text_{i}"] = ("STRING", {"forceInput": True})
+            
+        return inputs
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("concatenated_text",)
+    FUNCTION = "process_text"
+    CATEGORY = "Qwen-IO"
+
+    def process_text(self, input_count: int, seperator: str, clean_whitespace: bool, 
+                     search: str, replace: str, use_regex: bool, **kwargs) -> Tuple[str]:
+        
+        # 1. Clamp Active Range
+        # We trust the widget, but clamp for safety.
+        active_count = max(1, min(int(input_count), 12))
+        
+        # 2. Collect Inputs
+        # Efficiently gather only the inputs that fall within the active range.
+        # This ignores any 'ghost' inputs that might still be in kwargs but hidden in UI.
+        collected_texts = []
+        for i in range(1, active_count + 1):
+            # Using get() handles cases where the slot is completely removed/missing
+            val = kwargs.get(f"text_{i}")
+            
+            if val is not None:
+                val = str(val)
+                if clean_whitespace:
+                    val = val.strip()
+                if val:
+                    collected_texts.append(val)
+
+        # 3. Handle Delimiter Escapes
+        real_delimiter = seperator.replace("\\n", "\n").replace("\\t", "\t")
+
+        # 4. Join
+        final_text = real_delimiter.join(collected_texts)
+
+        # 5. Grammar & Regex Cleaning
+        if clean_whitespace:
+            # Collapse multiple spaces
+            final_text = re.sub(r'\s+', ' ', final_text).strip()
+            # Fix punctuation spacing " . " -> ". "
+            final_text = re.sub(r'\s+([,.?!:;])', r'\1', final_text)
+            # Deduplicate punctuation ",," -> ","
+            final_text = re.sub(r'([,.?!:;])\1+', r'\1', final_text)
+
+        if search:
+            try:
+                if use_regex:
+                    final_text = re.sub(search, replace, final_text)
+                else:
+                    final_text = final_text.replace(search, replace)
+            except re.error as e:
+                logger.error(f"Regex Error in Qwen_TextConcatenate: {e}")
+                
+        return (final_text,)
 
 
 class Qwen_TextSave:
     """
-    Saves a text string to a local file.
-    Features: 
-    - Index appending (00001)
-    - Automatic subfolder creation
-    - On-Node Text Preview
+    Saves text to file with auto-indexing and existence checks.
     """
-    
     @classmethod
-    def INPUT_TYPES(cls):
-        return {
+    def INPUT_TYPES(cls) -> Dict[str, Any]:
+        inputs = {
             "required": {
-                "text": ("STRING", {"forceInput": True}),
-                "path": ("STRING", {"default": "./output"}),
-                "filename": ("STRING", {"default": "output_text"}),
-                "overwrite": ("BOOLEAN", {"default": False}),
+                # The name "input_count" MUST match the JS search
+                "input_count": ("INT", {"default": 2, "min": 1, "max": 12, "step": 1, "display": "number"}), 
+                "seperator": ("STRING", {"default": " ", "multiline": False}),
+                "clean_whitespace": ("BOOLEAN", {"default": True}),
+                "search": ("STRING", {"default": "", "multiline": False}),
+                "replace": ("STRING", {"default": "", "multiline": False}),
+                "use_regex": ("BOOLEAN", {"default": False}),
             },
-            "optional": {
-                "index": ("INT", {"default": -1, "min": -1, "max": 999999, "tooltip": "-1 to disable index appending"}),
-                "subfolder": ("STRING", {"default": ""}),
-            }
+            "optional": {}
         }
+        
+        # Pre-define all slots so Python doesn't reject them before JS removes them
+        for i in range(1, 13):
+            inputs["optional"][f"text_{i}"] = ("STRING", {"forceInput": True})
+            
+        return inputs
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("saved_path",)
@@ -77,169 +208,208 @@ class Qwen_TextSave:
     CATEGORY = "Qwen-IO"
     OUTPUT_NODE = True
 
-    def save_text(self, text, path, filename, overwrite, index=-1, subfolder=""):
-        # 1. Path Construction
+    def save_text(self, text: str, path: str, filename: str, overwrite: bool, 
+                  auto_index: bool, manual_index: int = -1, subfolder: str = "") -> Dict[str, Any]:
+        
+        clean_filename = sanitize_filename(filename)
         base_dir = Path(path)
         if subfolder.strip():
             base_dir = base_dir / subfolder.strip()
         
         try:
             base_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            raise OSError(f"Could not create directory '{base_dir}': {e}")
+        except OSError as e:
+            return {"ui": {"text": [f"Error creating directory: {e}"]}, "result": ("",)}
 
-        # 2. Filename Construction
-        name_part = filename.strip()
-        if index >= 0:
-            name_part = f"{name_part}_{index:05d}"
+        index_suffix = ""
+        if auto_index:
+            idx = get_next_index(base_dir, clean_filename)
+            index_suffix = f"_{idx:05d}"
+        elif manual_index >= 0:
+            index_suffix = f"_{manual_index:05d}"
         
-        full_path = base_dir / f"{name_part}.txt"
+        full_path = base_dir / f"{clean_filename}{index_suffix}.txt"
 
-        # 3. Overwrite Protection
-        if not overwrite and full_path.exists():
-            if index == -1:
-                counter = 1
-                while full_path.exists():
-                    full_path = base_dir / f"{name_part}_{counter:05d}.txt"
-                    counter += 1
-            else:
-                logger.warning(f"File '{full_path}' exists and overwrite is False. Skipping save.")
-                return {
-                    "ui": {"text": [f"⚠️ Skipped (Exists):\n{full_path}"]}, 
-                    "result": (str(full_path),)
-                }
+        if not overwrite and full_path.exists() and not auto_index:
+             return {"ui": {"text": [f"⚠️ Skipped (Exists): {full_path}"]}, "result": (str(full_path),)}
 
-        # 4. Write to Disk
         try:
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(text)
-            logger.info(f"Saved text to: {full_path}")
-        except Exception as e:
-            raise IOError(f"Failed to save text file: {e}")
+        except IOError as e:
+            return {"ui": {"text": [f"Error writing file: {e}"]}, "result": ("",)}
 
-        # 5. Return with UI Preview (Limit preview to 1000 chars)
-        preview_text = f"Saved to: {full_path}\n\nContent Preview:\n{text[:1000]}"
-        if len(text) > 1000:
-            preview_text += "..."
-            
-        return {"ui": {"text": [preview_text]}, "result": (str(full_path),)}
+        return {"ui": {"text": [f"Saved: {full_path}"]}, "result": (str(full_path),)}
 
 
 class Qwen_ImageSave:
     """
-    Saves an image tensor to disk.
-    Features:
-    - PNG/JPG/WEBP support
-    - Lossless/Compression toggles
-    - On-Node Path Preview
+    Saves image batches with metadata support and format conversion.
+    Features: WebP/JPG Exif Metadata, Lossless Toggle, Auto-Indexing.
     """
-
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> Dict[str, Any]:
         return {
             "required": {
                 "image": ("IMAGE",),
                 "path": ("STRING", {"default": "./output"}),
                 "filename": ("STRING", {"default": "output_image"}),
-                "extension": (["png", "jpg", "webp"], {"default": "png"}),
-                "quality": ("INT", {"default": 90, "min": 1, "max": 100, "tooltip": "100 = Best Quality / Lowest Compression"}),
-                "lossless": ("BOOLEAN", {"default": False, "tooltip": "Overrides quality for supported formats (WEBP/PNG)"}),
+                "extension": (["png", "jpg", "webp"], {"default": "webp"}),
+                "quality": ("INT", {"default": 90, "min": 1, "max": 100, "tooltip": "For WebP Lossless, this controls compression effort (speed vs size)."}),
+                "lossless": ("BOOLEAN", {"default": False, "tooltip": "Only affects WebP. PNG is always lossless; JPG is always lossy."}),
+                "auto_index": ("BOOLEAN", {"default": True}),
+                "save_metadata": ("BOOLEAN", {"default": True}),
+                "meta_format": (["ComfyUI", "A1111/Civitai"], {"default": "ComfyUI"}),
+                "show_preview": ("BOOLEAN", {"default": True}),
                 "overwrite": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                "index": ("INT", {"default": -1, "min": -1, "max": 999999, "tooltip": "-1 to disable index appending"}),
+                "manual_index": ("INT", {"default": -1, "min": -1}),
                 "subfolder": ("STRING", {"default": ""}),
-            }
+            },
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
     RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("saved_path",)
-    FUNCTION = "save_image"
+    RETURN_NAMES = ("saved_paths",)
+    FUNCTION = "save_images"
     CATEGORY = "Qwen-IO"
     OUTPUT_NODE = True
 
-    def save_image(self, image, path, filename, extension, quality, lossless, overwrite, index=-1, subfolder=""):
-        # 1. Path Construction
+    def save_images(self, image: torch.Tensor, path: str, filename: str, extension: str, 
+                    quality: int, lossless: bool, auto_index: bool, save_metadata: bool, 
+                    meta_format: str, show_preview: bool, overwrite: bool, 
+                    manual_index: int = -1, subfolder: str = "",
+                    prompt=None, extra_pnginfo=None) -> Dict[str, Any]:
+        
+        clean_filename = sanitize_filename(filename)
         base_dir = Path(path)
         if subfolder.strip():
             base_dir = base_dir / subfolder.strip()
         
         try:
             base_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            raise OSError(f"Could not create directory '{base_dir}': {e}")
+        except OSError as e:
+             return {"ui": {"text": [f"Error creating dir: {e}"]}, "result": ("",)}
 
-        # 2. Filename Construction
-        name_part = filename.strip()
-        if index >= 0:
-            name_part = f"{name_part}_{index:05d}"
-        
-        full_path = base_dir / f"{name_part}.{extension}"
+        current_idx = 1
+        if auto_index:
+            current_idx = get_next_index(base_dir, clean_filename)
+        elif manual_index >= 0:
+            current_idx = manual_index
 
-        # 3. Overwrite Logic
-        if not overwrite and full_path.exists():
-            if index == -1:
-                counter = 1
-                while full_path.exists():
-                    full_path = base_dir / f"{name_part}_{counter:05d}.{extension}"
-                    counter += 1
-            else:
-                logger.warning(f"File '{full_path}' exists and overwrite is False. Skipping save.")
-                return {
-                    "ui": {"text": [f"⚠️ Skipped (Exists):\n{full_path}"]}, 
-                    "result": (str(full_path),)
-                }
+        saved_paths = []
+        preview_images = []
 
-        # 4. Tensor Conversion (Batch Processing)
-        if image.shape[0] > 1:
-            logger.warning("Batch size > 1 detected. Only saving the first image in batch.")
-        
-        i = 255. * image[0].cpu().numpy()
-        img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
-
-        # 5. Format-Specific Saving Logic
-        save_kwargs = {}
-        
-        if extension == "png":
-            # Map quality 100->1 to compress_level 0->9
-            compression = max(0, min(9, int((100 - quality) / 10)))
-            save_kwargs["compress_level"] = compression
-            save_kwargs["optimize"] = True
+        for i, img_tensor in enumerate(image):
+            suffix = ""
+            if auto_index or manual_index >= 0 or len(image) > 1:
+                suffix = f"_{current_idx:05d}"
             
-        elif extension == "jpg":
-            if lossless:
-                logger.warning("JPG does not support lossless mode. Ignoring toggle.")
-            save_kwargs["quality"] = quality
-            save_kwargs["optimize"] = True
+            full_path = base_dir / f"{clean_filename}{suffix}.{extension}"
+            
+            if auto_index or manual_index >= 0 or len(image) > 1:
+                current_idx += 1
 
-        elif extension == "webp":
-            if lossless:
-                save_kwargs["lossless"] = True
-                save_kwargs["quality"] = 100
-            else:
-                save_kwargs["quality"] = quality
-                save_kwargs["lossless"] = False
+            if not overwrite and full_path.exists() and not auto_index and len(image) == 1:
+                saved_paths.append(str(full_path))
+                continue
 
-        # 6. Write
-        try:
-            img.save(str(full_path), **save_kwargs)
-            logger.info(f"Saved image to: {full_path}")
-        except Exception as e:
-            raise IOError(f"Failed to save image: {e}")
+            # Convert Tensor to Numpy (H, W, C) -> (H, W, C) uint8
+            img_np = (255. * img_tensor.cpu().numpy()).clip(0, 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_np)
 
-        # 7. Return with UI Preview
-        return {"ui": {"text": [f"Saved Image to:\n{full_path}"]}, "result": (str(full_path),)}
+            # --- Save Arguments Setup ---
+            save_args = {"quality": quality}
+            
+            # --- Format Specific Logic ---
+            if extension == "png":
+                # PNG is always lossless. 'compress_level' 4 is a good speed/size balance.
+                save_args["compress_level"] = 4
+                if save_metadata:
+                    pnginfo = PngImagePlugin.PngInfo()
+                    if meta_format == "ComfyUI":
+                        if prompt: 
+                            pnginfo.add_text("prompt", json.dumps(prompt))
+                        if extra_pnginfo and "workflow" in extra_pnginfo:
+                            pnginfo.add_text("workflow", json.dumps(extra_pnginfo["workflow"]))
+                    else:
+                        pnginfo.add_text("parameters", f"Prompt: {json.dumps(prompt)}")
+                    save_args["pnginfo"] = pnginfo
+
+            elif extension == "webp":
+                # Apply Lossless toggle
+                save_args["lossless"] = lossless
+                
+                if save_metadata:
+                    exif_data = pil_img.getexif()
+                    meta_dict = {}
+                    
+                    if meta_format == "ComfyUI":
+                        if prompt: meta_dict["prompt"] = prompt
+                        if extra_pnginfo and "workflow" in extra_pnginfo:
+                            meta_dict["workflow"] = extra_pnginfo["workflow"]
+                    else:
+                        if prompt: meta_dict["parameters"] = f"Prompt: {json.dumps(prompt)}"
+
+                    # Tag 0x010e (ImageDescription) is the standard container for JSON in WebP
+                    if meta_dict:
+                        exif_data[0x010e] = json.dumps(meta_dict)
+                        save_args["exif"] = exif_data.tobytes()
+
+            elif extension == "jpg":
+                # JPG is always lossy; lossless toggle ignored.
+                if save_metadata:
+                    exif_data = pil_img.getexif()
+                    meta_dict = {}
+                    if meta_format == "ComfyUI":
+                        if prompt: meta_dict["prompt"] = prompt
+                        if extra_pnginfo and "workflow" in extra_pnginfo:
+                            meta_dict["workflow"] = extra_pnginfo["workflow"]
+                    else:
+                        if prompt: meta_dict["parameters"] = f"Prompt: {json.dumps(prompt)}"
+
+                    if meta_dict:
+                        exif_data[0x010e] = json.dumps(meta_dict)
+                        save_args["exif"] = exif_data.tobytes()
+
+            # --- Write to Disk ---
+            try:
+                pil_img.save(str(full_path), **save_args)
+                saved_paths.append(str(full_path))
+                if show_preview:
+                    preview_images.append({
+                        "filename": full_path.name,
+                        "subfolder": subfolder,
+                        "type": "output"
+                    })
+            except Exception as e:
+                logger.error(f"Failed to save {full_path}: {e}")
+
+        result_dict = {"ui": {}, "result": (saved_paths,)}
+        if show_preview and preview_images:
+            result_dict["ui"]["images"] = preview_images
+        
+        if saved_paths:
+            result_dict["ui"]["text"] = [f"Batch Saved ({len(saved_paths)}): {saved_paths[0]} ..."]
+        else:
+             result_dict["ui"]["text"] = ["No images saved."]
+
+        return result_dict
 
 
 # --- Registration ---
+
 NODE_CLASS_MAPPINGS = {
-    "Qwen_TextView": Qwen_TextView,
+    "Qwen_DateGenerator": Qwen_DateGenerator,
+    "Qwen_TextConcatenate": Qwen_TextConcatenate,
     "Qwen_TextSave": Qwen_TextSave,
     "Qwen_ImageSave": Qwen_ImageSave,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "Qwen_TextView": "RM-Text Viewer",
+    "Qwen_DateGenerator": "RM-Date Generator",
+    "Qwen_TextConcatenate": "RM-Text Concatenate",
     "Qwen_TextSave": "RM-Text Save",
     "Qwen_ImageSave": "RM-Image Save",
 }
