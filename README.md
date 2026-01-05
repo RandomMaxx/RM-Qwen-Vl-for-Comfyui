@@ -74,7 +74,10 @@ ComfyUI/
         └── logs/
             └── qwen3_vl.log          <-- Debug & Error Logs
 ```
-🧩 Node Overview
+
+---
+
+## 🧩 Node Overview
 1. Management & Loading
 
 RM-Qwen3-VL Model Manager 
@@ -133,7 +136,9 @@ system_prompt: Fully customizable system instructions.
 
 Boolean Flags: Toggles for specific tasks (e.g., "Read Text", "Analyze Lighting", "Describe Clothing").
 
-⚠️ Common Issues & Troubleshooting
+---
+
+## ⚠️ Common Issues & Troubleshooting
 1. "RuntimeError: CUDA Out of memory"
 
 Transformers: Use the Loader to set quantization to 4bit.
@@ -156,5 +161,8 @@ Fix: Connect the Model Manager node, select a model, set action to Download, and
 
 Check custom_nodes/ComfyUI-Qwen3-VL/logs/qwen3_vl.log for detailed error messages and download progress.
 
-📜 License
+---
+
+## 📜 License
+
 This custom node is open-source. The Qwen3-VL models are subject to the original license by the Qwen Team (Alibaba Cloud).
