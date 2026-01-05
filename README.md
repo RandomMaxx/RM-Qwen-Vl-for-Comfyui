@@ -80,90 +80,91 @@ ComfyUI/
 ## 🧩 Node Overview
 * **1. Management & Loading
 
-RM-Qwen3-VL Model Manager 
-
-Role: Your control center for model files.
-
-Inputs:
-
-model_name: Select from a predefined list (starred items * are not yet installed).
-
-action: Download (fetches from HF), Check Status, or Remove (deletes local files).
-
-Note: Supports both GGUF (files) and Transformers (folders) downloading.
-
-Qwen3-VL Loader (GGUF + HF)
-Role: The universal model loader.
-
-Inputs:
-
-model: Select any installed model. The node auto-detects the backend.
-
-quantization: For Transformers models (4bit/8bit/None).
-
-gpu_layers_gguf: For GGUF models (-1 = Offload All to GPU).
+   RM-Qwen3-VL Model Manager 
+   
+   Role: Your control center for model files.
+   
+   Inputs:
+   
+   model_name: Select from a predefined list (starred items * are not yet installed).
+   
+   action: Download (fetches from HF), Check Status, or Remove (deletes local files).
+   
+   Note: Supports both GGUF (files) and Transformers (folders) downloading.
+   
+   Qwen3-VL Loader (GGUF + HF)
+   Role: The universal model loader.
+   
+   Inputs:
+   
+   model: Select any installed model. The node auto-detects the backend.
+   
+   quantization: For Transformers models (4bit/8bit/None).
+   
+   gpu_layers_gguf: For GGUF models (-1 = Offload All to GPU).
 
 * **2. Image Tools
-RM-Qwen3-VL Image Loader
-Role: A powerful alternative to the standard "Load Image" node.
-
-Features:
-
-Directory Scan: Point it to a folder (directory) to load images sequentially.
-
-Quick Select: Dropdown menu remembers your last 15 used paths.
-
-Filtering: Use filter to find specific filenames (e.g., "landscape").
-
-Indexing: Use index to cycle through images in a folder.
-
-RM-Qwen3-VL Image Rescaler
-Role: Prepares images for the VLM.
-
-Features: Resizes images to standard resolutions (e.g., 1024x1024) while maintaining aspect ratio and ensuring dimensions are divisible by the model's patch size (default modulo 16/32).
+   RM-Qwen3-VL Image Loader
+   Role: A powerful alternative to the standard "Load Image" node.
+   
+   Features:
+   
+   Directory Scan: Point it to a folder (directory) to load images sequentially.
+   
+   Quick Select: Dropdown menu remembers your last 15 used paths.
+   
+   Filtering: Use filter to find specific filenames (e.g., "landscape").
+   
+   Indexing: Use index to cycle through images in a folder.
+   
+   RM-Qwen3-VL Image Rescaler
+   Role: Prepares images for the VLM.
+   
+   Features: Resizes images to standard resolutions (e.g., 1024x1024) while maintaining aspect ratio and ensuring dimensions are divisible by the model's patch size (default modulo 16/32).
 
 * **3. Inference
-RM-Qwen3-VL Run
-Role: The main brain. Generates text from images.
-
-Inputs:
-
-caption_type: Choose presets like "Descriptive", "Thinking" (for COT models), "Danbooru Tags", or "JSON".
-
-prompt_mode: Prepend your custom prompt or Overwrite the system prompt.
-
-system_prompt: Fully customizable system instructions.
-
-Boolean Flags: Toggles for specific tasks (e.g., "Read Text", "Analyze Lighting", "Describe Clothing").
+   RM-Qwen3-VL Run
+   Role: The main brain. Generates text from images.
+   
+   Inputs:
+   
+   caption_type: Choose presets like "Descriptive", "Thinking" (for COT models), "Danbooru Tags", or "JSON".
+   
+   prompt_mode: Prepend your custom prompt or Overwrite the system prompt.
+   
+   system_prompt: Fully customizable system instructions.
+   
+   Boolean Flags: Toggles for specific tasks (e.g., "Read Text", "Analyze Lighting", "Describe Clothing").
 
 ---
 
 ## ⚠️ Common Issues & Troubleshooting
 * **1. "RuntimeError: CUDA Out of memory"
 
-Transformers: Use the Loader to set quantization to 4bit.
-
-GGUF: Reduce n_ctx (context size) or use a smaller quantization file (e.g., Q4_K_S).
-
-General: Enable unload_when_done in the Run node.
+   Transformers: Use the Loader to set quantization to 4bit.
+   
+   GGUF: Reduce n_ctx (context size) or use a smaller quantization file (e.g., Q4_K_S).
+   
+   General: Enable unload_when_done in the Run node.
 
 * **2. "GGUF Model missing mmproj file"
 
-Cause: GGUF models require a separate "Vision Projector" file (usually named mmproj-....gguf).
-
-Fix: Use the Model Manager node to download the GGUF model; it automatically fetches the required mmproj file defined in qwen_models.json.
+   Cause: GGUF models require a separate "Vision Projector" file (usually named mmproj-....gguf).
+   
+   Fix: Use the Model Manager node to download the GGUF model; it automatically fetches the required mmproj file defined in qwen_models.json.
 
 * **3. "No models found"
 
-Fix: Connect the Model Manager node, select a model, set action to Download, and run the queue once.
+   Fix: Connect the Model Manager node, select a model, set action to Download, and run the queue once.
 
 * **4. Logs & Debugging
 
-Check custom_nodes/ComfyUI-Qwen3-VL/logs/qwen3_vl.log for detailed error messages and download progress.
+   Check custom_nodes/ComfyUI-Qwen3-VL/logs/qwen3_vl.log for detailed error messages and download progress.
 
 ---
 
 ## 📜 License
 
 This custom node is open-source. The Qwen3-VL models are subject to the original license by the Qwen Team (Alibaba Cloud).
+
 
