@@ -241,12 +241,20 @@ class Qwen_TextSave:
 
         return {"ui": {"text": [f"Saved: {full_path}"]}, "result": (str(full_path),)}
 
+# --- Main Node Class ---
 
 class Qwen_ImageSave:
     """
-    Saves image batches with metadata support and format conversion.
-    Features: WebP/JPG Exif Metadata, Lossless Toggle, Auto-Indexing.
+    Saves image batches with hybrid metadata support (WAS-Suite & A1111 compatibility).
+    
+    Features: 
+    - High-Performance NumPy conversion.
+    - Dual Metadata Modes:
+      1. 'ComfyUI' (WAS-Style): Best for loading workflows back into ComfyUI.
+      2. 'A1111/Civitai' (Qwen-Style): Adds 'parameters' text/tag for external parsers.
+    - WebP Lossless & Optimization support.
     """
+    
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
         return {
@@ -254,11 +262,12 @@ class Qwen_ImageSave:
                 "image": ("IMAGE",),
                 "path": ("STRING", {"default": "./output"}),
                 "filename": ("STRING", {"default": "output_image"}),
-                "extension": (["png", "jpg", "webp"], {"default": "webp"}),
-                "quality": ("INT", {"default": 90, "min": 1, "max": 100, "tooltip": "For WebP Lossless, this controls compression effort (speed vs size)."}),
-                "lossless": ("BOOLEAN", {"default": False, "tooltip": "Only affects WebP. PNG is always lossless; JPG is always lossy."}),
+                "extension": (["png", "jpg", "webp", "bmp", "tiff"], {"default": "webp"}),
+                "quality": ("INT", {"default": 90, "min": 1, "max": 100, "tooltip": "Quality 1-100. Affects JPG and WebP."}),
+                "lossless": ("BOOLEAN", {"default": False, "tooltip": "Only affects WebP."}),
+                "optimize_image": ("BOOLEAN", {"default": True, "tooltip": "Perform optimization pass (smaller size, slower save)."}),
                 "auto_index": ("BOOLEAN", {"default": True}),
-                "save_metadata": ("BOOLEAN", {"default": True}),
+                "save_metadata": ("BOOLEAN", {"default": True, "tooltip": "Save Prompt and Workflow metadata."}),
                 "meta_format": (["ComfyUI", "A1111/Civitai"], {"default": "ComfyUI"}),
                 "show_preview": ("BOOLEAN", {"default": True}),
                 "overwrite": ("BOOLEAN", {"default": False}),
@@ -277,13 +286,19 @@ class Qwen_ImageSave:
     OUTPUT_NODE = True
 
     def save_images(self, image: torch.Tensor, path: str, filename: str, extension: str, 
-                    quality: int, lossless: bool, auto_index: bool, save_metadata: bool, 
-                    meta_format: str, show_preview: bool, overwrite: bool, 
+                    quality: int, lossless: bool, optimize_image: bool, auto_index: bool, 
+                    save_metadata: bool, meta_format: str, show_preview: bool, overwrite: bool, 
                     manual_index: int = -1, subfolder: str = "",
                     prompt=None, extra_pnginfo=None) -> Dict[str, Any]:
         
         clean_filename = sanitize_filename(filename)
-        base_dir = Path(path)
+        
+        # Path Resolution
+        if os.path.isabs(path):
+            base_dir = Path(path)
+        else:
+            base_dir = Path(os.getcwd()) / path
+
         if subfolder.strip():
             base_dir = base_dir / subfolder.strip()
         
@@ -292,6 +307,7 @@ class Qwen_ImageSave:
         except OSError as e:
              return {"ui": {"text": [f"Error creating dir: {e}"]}, "result": ("",)}
 
+        # Indexing Setup
         current_idx = 1
         if auto_index:
             current_idx = get_next_index(base_dir, clean_filename)
@@ -301,6 +317,7 @@ class Qwen_ImageSave:
         saved_paths = []
         preview_images = []
 
+        # Loop through batch
         for i, img_tensor in enumerate(image):
             suffix = ""
             if auto_index or manual_index >= 0 or len(image) > 1:
@@ -308,95 +325,128 @@ class Qwen_ImageSave:
             
             full_path = base_dir / f"{clean_filename}{suffix}.{extension}"
             
+            # Increment index
             if auto_index or manual_index >= 0 or len(image) > 1:
                 current_idx += 1
 
-            if not overwrite and full_path.exists() and not auto_index and len(image) == 1:
-                saved_paths.append(str(full_path))
-                continue
+            # Overwrite Check
+            if not overwrite and full_path.exists():
+                if not auto_index and len(image) == 1:
+                    logger.warning(f"File exists and overwrite=False: {full_path}")
+                    saved_paths.append(str(full_path))
+                    continue
 
-            # Convert Tensor to Numpy (H, W, C) -> (H, W, C) uint8
+            # Tensor -> Numpy -> PIL (High Performance)
             img_np = (255. * img_tensor.cpu().numpy()).clip(0, 255).astype(np.uint8)
             pil_img = Image.fromarray(img_np)
 
-            # --- Save Arguments Setup ---
-            save_args = {"quality": quality}
-            
-            # --- Format Specific Logic ---
-            if extension == "png":
-                # PNG is always lossless. 'compress_level' 4 is a good speed/size balance.
-                save_args["compress_level"] = 4
-                if save_metadata:
-                    pnginfo = PngImagePlugin.PngInfo()
-                    if meta_format == "ComfyUI":
-                        if prompt: 
-                            pnginfo.add_text("prompt", json.dumps(prompt))
-                        if extra_pnginfo and "workflow" in extra_pnginfo:
-                            pnginfo.add_text("workflow", json.dumps(extra_pnginfo["workflow"]))
-                    else:
-                        pnginfo.add_text("parameters", f"Prompt: {json.dumps(prompt)}")
-                    save_args["pnginfo"] = pnginfo
+            # --- Metadata Logic ---
+            exif_data = None
+            png_metadata = PngImagePlugin.PngInfo()
 
-            elif extension == "webp":
-                # Apply Lossless toggle
-                save_args["lossless"] = lossless
+            if save_metadata:
+                # 1. Setup PNG Metadata (Universal Base)
+                if prompt:
+                    png_metadata.add_text("prompt", json.dumps(prompt))
+                if extra_pnginfo:
+                    for key, value in extra_pnginfo.items():
+                        png_metadata.add_text(key, json.dumps(value))
                 
-                if save_metadata:
-                    exif_data = pil_img.getexif()
-                    meta_dict = {}
+                # A1111 Compatibility for PNG
+                if meta_format == "A1111/Civitai" and prompt:
+                    png_metadata.add_text("parameters", f"Prompt: {json.dumps(prompt)}")
+
+                # 2. Setup WebP/JPG Metadata (EXIF)
+                if extension in ['webp', 'jpg', 'jpeg']:
+                    img_exif = pil_img.getexif()
+
+                    # MODE A: WAS-Suite Style (Default/ComfyUI)
+                    # Best for reloading workflows in ComfyUI
+                    if meta_format == "ComfyUI":
+                        if prompt:
+                            # 0x010f = ImageDescription / Make
+                            img_exif[0x010f] = "Prompt:" + json.dumps(prompt)
+                        if extra_pnginfo:
+                            workflow_metadata = ""
+                            for x in extra_pnginfo:
+                                workflow_metadata += json.dumps(extra_pnginfo[x])
+                            # 0x010e = ImageDescription / Model
+                            img_exif[0x010e] = "Workflow:" + workflow_metadata
                     
-                    if meta_format == "ComfyUI":
-                        if prompt: meta_dict["prompt"] = prompt
-                        if extra_pnginfo and "workflow" in extra_pnginfo:
-                            meta_dict["workflow"] = extra_pnginfo["workflow"]
-                    else:
-                        if prompt: meta_dict["parameters"] = f"Prompt: {json.dumps(prompt)}"
+                    # MODE B: Qwen/A1111 Style
+                    # Best for Civitai/A1111 detection (Single JSON container)
+                    elif meta_format == "A1111/Civitai":
+                        meta_dict = {}
+                        if prompt:
+                            meta_dict["prompt"] = prompt
+                        if extra_pnginfo:
+                            for key, value in extra_pnginfo.items():
+                                meta_dict[key] = value
+                        
+                        # Add the specific "parameters" key A1111 parsers look for
+                        if prompt:
+                            meta_dict["parameters"] = f"Prompt: {json.dumps(prompt)}"
+                        
+                        if meta_dict:
+                            # Dump entire dict to 0x010e
+                            img_exif[0x010e] = json.dumps(meta_dict)
 
-                    # Tag 0x010e (ImageDescription) is the standard container for JSON in WebP
-                    if meta_dict:
-                        exif_data[0x010e] = json.dumps(meta_dict)
-                        save_args["exif"] = exif_data.tobytes()
+                    exif_data = img_exif.tobytes()
 
-            elif extension == "jpg":
-                # JPG is always lossy; lossless toggle ignored.
-                if save_metadata:
-                    exif_data = pil_img.getexif()
-                    meta_dict = {}
-                    if meta_format == "ComfyUI":
-                        if prompt: meta_dict["prompt"] = prompt
-                        if extra_pnginfo and "workflow" in extra_pnginfo:
-                            meta_dict["workflow"] = extra_pnginfo["workflow"]
-                    else:
-                        if prompt: meta_dict["parameters"] = f"Prompt: {json.dumps(prompt)}"
-
-                    if meta_dict:
-                        exif_data[0x010e] = json.dumps(meta_dict)
-                        save_args["exif"] = exif_data.tobytes()
-
-            # --- Write to Disk ---
+            # --- Save Execution ---
             try:
+                save_args = {
+                    "optimize": optimize_image,
+                }
+
+                if extension == 'webp':
+                    save_args["quality"] = quality
+                    save_args["lossless"] = lossless
+                    if exif_data:
+                        save_args["exif"] = exif_data
+                        
+                elif extension == 'png':
+                    save_args["compress_level"] = 4 
+                    if png_metadata:
+                        save_args["pnginfo"] = png_metadata
+                        
+                elif extension in ['jpg', 'jpeg']:
+                    save_args["quality"] = quality
+                    if pil_img.mode == 'RGBA':
+                        pil_img = pil_img.convert('RGB')
+                    # JPG EXIF support is limited in Pillow without specialized handling,
+                    # but we pass the bytes if generated.
+                    if exif_data:
+                        save_args["exif"] = exif_data
+                
+                elif extension == 'tiff':
+                    save_args["quality"] = quality
+
                 pil_img.save(str(full_path), **save_args)
                 saved_paths.append(str(full_path))
+                
                 if show_preview:
                     preview_images.append({
                         "filename": full_path.name,
-                        "subfolder": subfolder,
+                        "subfolder": str(subfolder) if subfolder else "",
                         "type": "output"
                     })
+
             except Exception as e:
                 logger.error(f"Failed to save {full_path}: {e}")
 
+        # Return results
         result_dict = {"ui": {}, "result": (saved_paths,)}
         if show_preview and preview_images:
             result_dict["ui"]["images"] = preview_images
         
         if saved_paths:
-            result_dict["ui"]["text"] = [f"Batch Saved ({len(saved_paths)}): {saved_paths[0]} ..."]
+            display_text = f"Saved {len(saved_paths)} images to {base_dir}"
+            result_dict["ui"]["text"] = [display_text]
         else:
              result_dict["ui"]["text"] = ["No images saved."]
 
         return result_dict
-
 
 # --- Registration ---
 
