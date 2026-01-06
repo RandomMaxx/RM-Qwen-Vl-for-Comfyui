@@ -33,18 +33,24 @@ This suite has been re-engineered for **reliability**, **speed**, and **ease of 
 
 ### **Method 1: Manual (Recommended)**
 
-1. Navigate to your ComfyUI custom nodes directory:  
+1. Navigate to your ComfyUI custom nodes directory:
+```
    cd ComfyUI/custom\_nodes/
-2. Clone this repository:  
+```
+3. Clone this repository:
+```
    git clone \[https://github.com/yourusername/ComfyUI-Qwen3-VL.git](https://github.com/yourusername/ComfyUI-Qwen3-VL.git)  
    cd ComfyUI-Qwen3-VL
-3. **Install Dependencies**:
-
+```
+5. **Install Dependencies**:
+```
    * **Windows (Portable):**  
      ..\\..\\..\\python\_embeded\\python.exe -m pip install -r requirements.txt
+```
+```
    * **Linux / Mac / Venv:**  
      pip install -r requirements.txt
-
+```
 \[!NOTE]  
 For GGUF support on NVIDIA GPUs, ensure llama-cpp-python is compiled with CUDA support. If pre-built wheels fail, refer to the llama-cpp-python documentation.
 
