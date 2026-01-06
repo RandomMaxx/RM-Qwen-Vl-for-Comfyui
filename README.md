@@ -1,170 +1,20 @@
-# Qwen3-VL ComfyUI Node Suite (High Performance)
-
-A unified, production-grade ComfyUI node suite for **Qwen3-VL** Vision-Language models.
-
-This suite has been re-engineered for **reliability**, **speed**, and **ease of use**. It features a **Unified Loader** that automatically handles both standard Transformers (High Precision) and GGUF (Low VRAM/High Speed) models, along with powerful image management tools.
-
-## 🚀 Key Features
-
-* **🛡️ Unified Backend Support**:
-    * **Auto-Detect**: The loader automatically identifies if a model is GGUF or Transformers based on the file/folder selected.
-    * **Transformers**: Full support for 4-bit/8-bit `bitsandbytes` quantization and Flash Attention 2.
-    * **GGUF**: Native `llama-cpp-python` integration for running 8B+ models on consumer GPUs (6GB-8GB VRAM) or Apple Silicon.
-
-* **📦 Dedicated Model Manager**:
-    * **GUI-Based Management**: Download, Check Status, or Remove models directly from ComfyUI using the `Model Manager` node.
-    * **JSON Config**: All model URLs and settings are defined in `qwen_models.json` for easy updates.
-
-* **🖼️ Advanced Image Handling**:
-    * **Directory Scanning**: The `Image Loader` can scan entire local folders, filter by name, and cycle through images by index.
-    * **History System**: Remembers your recently used folders for quick access.
-    * **Smart Rescaling**: Dedicated `Image Rescaler` ensures optimal resolution matching for VLM inputs.
-
-* **🛠️ Production Ready**:
-    * **Logging**: Detailed operation logs saved to `logs/qwen3_vl.log`.
-    * **CUDA Safety**: Strict VRAM cleanup, garbage collection, and OOM protection.
-    * **Prompt Engineering**: Built-in "Thinking", "Describe", and "Analyze" presets.
-
----
-
-## 📥 Installation
-
-### Method 1: Manual (Recommended)
-
-1.  Navigate to your ComfyUI custom nodes directory:
-    ```bash
-    cd ComfyUI/custom_nodes/
-    ```
-2.  Clone this repository:
-    ```bash
-    git clone [https://github.com/yourusername/ComfyUI-Qwen3-VL.git](https://github.com/yourusername/ComfyUI-Qwen3-VL.git)
-    cd ComfyUI-Qwen3-VL
-    ```
-3.  **Install Dependencies**:
-    * **Windows (Portable):**
-        ```bash
-        ..\..\..\python_embeded\python.exe -m pip install -r requirements.txt
-        ```
-    * **Linux / Mac / Venv:**
-        ```bash
-        pip install -r requirements.txt
-        ```
-
-*Note: For GGUF support on NVIDIA GPUs, ensure `llama-cpp-python` is compiled with CUDA support. If pre-built wheels fail, refer to the llama-cpp-python documentation.*
-
----
-
-## 📂 Folder Structure
-
-The nodes expect models in specific directories inside your ComfyUI `models` folder.
-*Logs and Configs are stored inside the custom node folder.*
-
-```text
-ComfyUI/
+Qwen3-VL ComfyUI Node Suite (High Performance)A unified, production-grade ComfyUI node suite for Qwen3-VL Vision-Language models.This suite has been re-engineered for reliability, speed, and ease of use. It features a Unified Loader that automatically handles both standard Transformers (High Precision) and GGUF (Low VRAM/High Speed) models, along with powerful image management tools.🚀 Key Features🛡️ Unified Backend SupportAuto-Detect: The loader automatically identifies if a model is GGUF or Transformers based on the file/folder selected.Transformers: Full support for 4-bit/8-bit bitsandbytes quantization and Flash Attention 2.GGUF: Native llama-cpp-python integration for running 8B+ models on consumer GPUs (6GB-8GB VRAM) or Apple Silicon.📦 Dedicated Model ManagerGUI-Based Management: Download, Check Status, or Remove models directly from ComfyUI using the Model Manager node.JSON Config: All model URLs and settings are defined in qwen_models.json for easy updates.🖼️ Advanced Image HandlingDirectory Scanning: The Image Loader can scan entire local folders, filter by name, and cycle through images by index.History System: Remembers your recently used folders for quick access.Smart Rescaling: Dedicated Image Rescaler ensures optimal resolution matching for VLM inputs.🛠️ Production ReadyLogging: Detailed operation logs saved to logs/qwen3_vl.log.CUDA Safety: Strict VRAM cleanup, garbage collection, and OOM protection.Prompt Engineering: Built-in "Thinking", "Describe", and "Analyze" presets.📥 InstallationMethod 1: Manual (Recommended)Navigate to your ComfyUI custom nodes directory:cd ComfyUI/custom_nodes/
+Clone this repository:git clone [https://github.com/yourusername/ComfyUI-Qwen3-VL.git](https://github.com/yourusername/ComfyUI-Qwen3-VL.git)
+cd ComfyUI-Qwen3-VL
+Install Dependencies:Windows (Portable):..\..\..\python_embeded\python.exe -m pip install -r requirements.txt
+Linux / Mac / Venv:pip install -r requirements.txt
+[!NOTE]For GGUF support on NVIDIA GPUs, ensure llama-cpp-python is compiled with CUDA support. If pre-built wheels fail, refer to the llama-cpp-python documentation.📂 Folder StructureThe nodes expect models in specific directories inside your ComfyUI models folder.Logs and Configs are stored inside the custom node folder.ComfyUI/
 ├── models/
-│   └── VLM/                          <-- Main Model Directory
-│       ├── Qwen/Qwen3-VL-8B-Instruct/  <-- Standard HF Models (Folders)
-│       ├── qwen3-vl-8b-q4_k_m.gguf     <-- GGUF Models (Single Files)
-│       └── mmproj-model-f16.gguf       <-- GGUF Vision Projectors
+│   └── VLM/                        <-- Main Model Directory
+│       ├── Qwen/
+│       │   └── Qwen3-VL-8B-Inst/   <-- Standard HF Models (Folders)
+│       ├── qwen3-vl-8b-q4_k_m.gguf <-- GGUF Models (Single Files)
+│       └── mmproj-model-f16.gguf   <-- GGUF Vision Projectors
 │
 └── custom_nodes/
     └── ComfyUI-Qwen3-VL/
-        ├── qwen_models.json          <-- Model Definitions (URLs/Names)
-        ├── qwen_history.json         <-- User Folder History
+        ├── qwen_models.json        <-- Model Definitions (URLs/Names)
+        ├── qwen_history.json       <-- User Folder History
         └── logs/
-            └── qwen3_vl.log          <-- Debug & Error Logs
-```
-
----
-
-## 🧩 Node Overview
-* **1. Management & Loading
-
-   RM-Qwen3-VL Model Manager 
-   
-   Role: Your control center for model files.
-   
-   Inputs:
-   
-   model_name: Select from a predefined list (starred items * are not yet installed).
-   
-   action: Download (fetches from HF), Check Status, or Remove (deletes local files).
-   
-   Note: Supports both GGUF (files) and Transformers (folders) downloading.
-   
-   Qwen3-VL Loader (GGUF + HF)
-   Role: The universal model loader.
-   
-   Inputs:
-   
-   model: Select any installed model. The node auto-detects the backend.
-   
-   quantization: For Transformers models (4bit/8bit/None).
-   
-   gpu_layers_gguf: For GGUF models (-1 = Offload All to GPU).
-
-* **2. Image Tools
-   RM-Qwen3-VL Image Loader
-   Role: A powerful alternative to the standard "Load Image" node.
-   
-   Features:
-   
-   Directory Scan: Point it to a folder (directory) to load images sequentially.
-   
-   Quick Select: Dropdown menu remembers your last 15 used paths.
-   
-   Filtering: Use filter to find specific filenames (e.g., "landscape").
-   
-   Indexing: Use index to cycle through images in a folder.
-   
-   RM-Qwen3-VL Image Rescaler
-   Role: Prepares images for the VLM.
-   
-   Features: Resizes images to standard resolutions (e.g., 1024x1024) while maintaining aspect ratio and ensuring dimensions are divisible by the model's patch size (default modulo 16/32).
-
-* **3. Inference
-   RM-Qwen3-VL Run
-   Role: The main brain. Generates text from images.
-   
-   Inputs:
-   
-   caption_type: Choose presets like "Descriptive", "Thinking" (for COT models), "Danbooru Tags", or "JSON".
-   
-   prompt_mode: Prepend your custom prompt or Overwrite the system prompt.
-   
-   system_prompt: Fully customizable system instructions.
-   
-   Boolean Flags: Toggles for specific tasks (e.g., "Read Text", "Analyze Lighting", "Describe Clothing").
-
----
-
-## ⚠️ Common Issues & Troubleshooting
-* **1. "RuntimeError: CUDA Out of memory"
-
-   Transformers: Use the Loader to set quantization to 4bit.
-   
-   GGUF: Reduce n_ctx (context size) or use a smaller quantization file (e.g., Q4_K_S).
-   
-   General: Enable unload_when_done in the Run node.
-
-* **2. "GGUF Model missing mmproj file"
-
-   Cause: GGUF models require a separate "Vision Projector" file (usually named mmproj-....gguf).
-   
-   Fix: Use the Model Manager node to download the GGUF model; it automatically fetches the required mmproj file defined in qwen_models.json.
-
-* **3. "No models found"
-
-   Fix: Connect the Model Manager node, select a model, set action to Download, and run the queue once.
-
-* **4. Logs & Debugging
-
-   Check custom_nodes/ComfyUI-Qwen3-VL/logs/qwen3_vl.log for detailed error messages and download progress.
-
----
-
-## 📜 License
-
-This custom node is open-source. The Qwen3-VL models are subject to the original license by the Qwen Team (Alibaba Cloud).
-
-
+            └── qwen3_vl.log        <-- Debug & Error Logs
+🧩 Node Overview1. Management & LoadingRM-Qwen3-VL Model ManagerRole: Your control center for model files.Inputs:model_name: Select from a predefined list (starred items * are not yet installed).action: Download (fetches from HF), Check Status, or Remove (deletes local files).Note: Supports both GGUF (files) and Transformers (folders) downloading.Qwen3-VL Loader (GGUF + HF)Role: The universal model loader.Inputs:model: Select any installed model. The node auto-detects the backend.quantization: For Transformers models (4bit/8bit/None).gpu_layers_gguf: For GGUF models (-1 = Offload All to GPU).2. Image ToolsRM-Qwen3-VL Image LoaderRole: A powerful alternative to the standard "Load Image" node.Features:Directory Scan: Point it to a folder (directory) to load images sequentially.Quick Select: Dropdown menu remembers your last 15 used paths.Filtering: Use filter to find specific filenames (e.g., "landscape").Indexing: Use index to cycle through images in a folder.RM-Qwen3-VL Image RescalerRole: Prepares images for the VLM.Features: Resizes images to standard resolutions (e.g., 1024x1024) while maintaining aspect ratio and ensuring dimensions are divisible by the model's patch size (default modulo 16/32).3. InferenceRM-Qwen3-VL RunRole: The main brain. Generates text from images.Inputs:caption_type: Choose presets like "Descriptive", "Thinking" (for COT models), "Danbooru Tags", or "JSON".prompt_mode: Prepend your custom prompt or Overwrite the system prompt.system_prompt: Fully customizable system instructions.boolean flags: Toggles for specific tasks (e.g., "Read Text", "Analyze Lighting", "Describe Clothing").⚠️ Common Issues & Troubleshooting1. "RuntimeError: CUDA Out of memory"Transformers: Use the Loader to set quantization to 4bit.GGUF: Reduce n_ctx (context size) or use a smaller quantization file (e.g., Q4_K_S).General: Enable unload_when_done in the Run node.2. "GGUF Model missing mmproj file"Cause: GGUF models require a separate "Vision Projector" file (usually named mmproj-....gguf).Fix: Use the Model Manager node to download the GGUF model; it automatically fetches the required mmproj file defined in qwen_models.json.3. "No models found"Fix: Connect the Model Manager node, select a model, set action to Download, and run the queue once.4. Logs & DebuggingCheck custom_nodes/ComfyUI-Qwen3-VL/logs/qwen3_vl.log for detailed error messages and download progress.📜 LicenseThis custom node is open-source. The Qwen3-VL models are subject to the original license by the Qwen Team (Alibaba Cloud).
