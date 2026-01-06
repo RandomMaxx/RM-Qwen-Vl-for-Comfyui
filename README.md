@@ -52,6 +52,7 @@ For GGUF support on NVIDIA GPUs, ensure llama-cpp-python is compiled with CUDA s
 
 The nodes expect models in specific directories inside your ComfyUI models folder.  
 Logs and Configs are stored inside the custom node folder.  
+```
 ComfyUI/  
 ├── models/  
 │   └── VLM/                        <-- Main Model Directory  
@@ -66,7 +67,7 @@ ComfyUI/
 ├── qwen\_history.json       <-- User Folder History  
 └── logs/  
 └── qwen3\_vl.log        <-- Debug \& Error Logs
-
+```
 ## **🧩 Node Overview**
 
 ### **1. Management \& Loading**
