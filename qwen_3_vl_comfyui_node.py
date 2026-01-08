@@ -2,7 +2,7 @@
 Qwen3-VL ComfyUI Custom Node - High Performance Edition
 Unified node for Vision-Language tasks with support for all Qwen3-VL models.
 Supports GGUF (llama.cpp) and Transformers (HuggingFace) backends.
-Auto-loads model definitions from qwen_models.json and supports Auto-Download.
+Includes Advanced Generation Configuration.
 
 Optimized by: Principal Python Performance Engineer
 Status: Production Grade (In-Memory Processing, Local Only)
@@ -84,53 +84,41 @@ JSON_CONFIG_PATH = Path(__file__).parent / "qwen_models.json"
 
 # --- Configuration Maps ---
 CAPTION_TYPE_MAP = {
-    # --- Standard & General ---
     "Descriptive (Standard)": [
         "Describe this image in detail, covering the subject, background, and lighting.",
         "Describe the image in exactly {word_count} words.",
         "Write a {length} description of the image.",
     ],
-    
     "Straightforward (Concise)": [
         "Describe the main subject and action only. No flowery language.",
         "Concise description in under {word_count} words.",
         "Concise {length} description.",
     ],
-
-    # --- Model Specific: Image Gen ---
     "Z-Image Turbo (Structured)": [
         "Analyze the image and generate an image description in this strict order: [Subject], [Action/Context], [Lighting], [Camera/Film Spec], [Positive Constraints (Sharp, 8k)].",
         "Generate an image description in {word_count} words, focusing on subject, style, composition, camera and lighting.",
         "Write a {length} structured image description with emphasized subject, style and lighting details.",
     ],
-
     "Flux.1 (Natural Narrative)": [
         "Describe the image using rich, natural language. Focus on textures, atmosphere, and small details. Avoid list-style formatting.",
         "Write a detailed narrative image description in {word_count} words.",
         "Write a {length} natural language description focusing on atmosphere.",
     ],
-
-    # --- Model Specific: Video Gen ---
     "Wan 2.1 / Video (SSM Formula)": [
         "Describe the video potential of this image using the SSM formula: [Subject Description] + [Scene/Background] + [Implied Motion/Action].",
         "Write a video generation prompt in {word_count} words focusing on movement.",
         "Write a {length} video prompt describing the subject and the specific camera movement.",
     ],
-
-    # --- Tagging & Training ---
     "Danbooru Tags (Training)": [
         "Generate a list of Danbooru-style tags, separated by commas. Include character tags, clothing, and background.",
         "Generate approximately {word_count} Danbooru tags.",
         "Generate a {length} list of Danbooru tags.",
     ],
-
-    # --- Analysis & Technical ---
     "Photography Inspection": [
         "Analyze the technical photography aspects: Estimate the camera angle, focal length, aperture (depth of field), and lighting setup.",
         "Technical photography analysis in {word_count} words.",
         "Write a {length} technical report on the camera settings used.",
     ],
-
     "OCR / Text Extraction": [
         "Transcribe all visible text in the image exactly as it appears. Maintain line breaks if possible.",
         "Extract text in {word_count} words.",
@@ -139,28 +127,17 @@ CAPTION_TYPE_MAP = {
 }
 
 SHARED_BOOLEAN_OPTIONS = {
-    # 1. [ART STYLE & ATMOSPHERE]
     "Identify art style": ("BOOLEAN", {"default": False, "label_on": "Identify Art Style/Medium"}),
     "Describe mood": ("BOOLEAN", {"default": False, "label_on": "Describe Mood/Atmosphere"}),
-
-    # 2. [SUBJECT]
     "Focus on main subject": ("BOOLEAN", {"default": True, "label_on": "Focus on Main Subject"}),
     "Describe clothing": ("BOOLEAN", {"default": False, "label_on": "Describe Clothing"}),
-
-    # 3. [ACTION/CONTEXT]
     "Describe background": ("BOOLEAN", {"default": False, "label_on": "Describe Background"}),
     "Transcribe text": ("BOOLEAN", {"default": False, "label_on": "Read/Transcribe Text"}),
     "Mention watermarks": ("BOOLEAN", {"default": False, "label_on": "Mention watermarks"}),
-
-    # 4. [LIGHTING SPEC]
     "Analyze lighting": ("BOOLEAN", {"default": False, "label_on": "Include lighting info"}),
-
-    # 5. [CAMERA SPEC]
     "Analyze camera angle": ("BOOLEAN", {"default": False, "label_on": "Include camera angle"}),
     "Analyze composition": ("BOOLEAN", {"default": False, "label_on": "Describe composition"}),
     "Analyze depth": ("BOOLEAN", {"default": False, "label_on": "Describe depth/focus"}),
-
-    # 6. [CONSTRAINTS / POLISH]
     "Rate quality": ("BOOLEAN", {"default": False, "label_on": "Rate Technical Quality"}),
     "Be concise": ("BOOLEAN", {"default": False, "label_on": "Be Concise/Brief"}),
     "Omit artist names": ("BOOLEAN", {"default": False, "label_on": "Don't mention artist names"}),
@@ -168,38 +145,27 @@ SHARED_BOOLEAN_OPTIONS = {
 }
 
 OPTION_TEXT_MAP = {
-    # 1. [ART STYLE]
-    "Identify art style": "Identify the art style (e.g., photography, cinematic, oil painting, watercolor, anime, 3D render, pixel art, comic art, digital illustration, vector illustration) and medium used.",
-    "Describe mood": "Describe the overall mood, atmosphere, and emotional tone of the image.",
-
-    # 2. [SUBJECT]
-    "Focus on main subject": "Focus primarily on describing the main subject, their action, and physical details.",
+    "Identify art style": "Identify the art style and medium used.",
+    "Describe mood": "Describe the overall mood, atmosphere, and emotional tone.",
+    "Focus on main subject": "Focus primarily on describing the main subject.",
     "Describe clothing": "Describe the clothing, accessories, and fashion style in detail.",
-
-    # 3. [ACTION/CONTEXT]
     "Describe background": "Provide a description of the background, setting, and environment.",
     "Transcribe text": "Transcribe any visible text found within the image.",
     "Mention watermarks": "Note if there are any watermarks, signatures, or logos visible.",
-
-    # 4. [LIGHTING SPEC]
-    "Analyze lighting": "Include detailed information about the lighting setup (e.g., volumetric, cinematic, soft, rim light).",
-
-    # 5. [CAMERA SPEC]
-    "Analyze camera angle": "Describe the camera angle (e.g., eye-level, low angle) and shot type.",
-    "Analyze composition": "Describe the composition techniques used (e.g., rule of thirds, symmetry, framing).",
-    "Analyze depth": "Describe the depth of field, focus, and blur (bokeh) present in the image.",
-
-    # 6. [CONSTRAINTS / POLISH]
+    "Analyze lighting": "Include detailed information about the lighting setup.",
+    "Analyze camera angle": "Describe the camera angle and shot type.",
+    "Analyze composition": "Analyze the visual structure, subject placement, and use of spatial guides (such as the Rule of Thirds or Golden Ratio).",
+    "Analyze depth": "Describe the depth of field, focus, and blur.",
     "Rate quality": "Assess technical aspects like sharpness, focus, and noise levels.",
-    "Be concise": "Keep the description concise and to the point. Avoid flowery language.",
+    "Be concise": "Keep the description concise and to the point.",
     "Omit artist names": "Do NOT guess or mention specific artist names.",
     "Omit text detection": "Do NOT mention the presence or absence of text in the image.",
 }
+
+
+
 def clean_vram(model_dict: Optional[Dict[str, Any]] = None, unload: bool = False) -> None:
-    """
-    Performs unified VRAM cleanup and optional model offloading.
-    Uses defensive programming to ensure GGUF resources are actually released.
-    """
+    """Performs unified VRAM cleanup and optional model offloading."""
     if unload and model_dict:
         model = model_dict.get("model")
         backend = model_dict.get("backend", "transformers")
@@ -209,35 +175,59 @@ def clean_vram(model_dict: Optional[Dict[str, Any]] = None, unload: bool = False
                 model.to("cpu")
             except Exception:
                 pass 
-        
         elif backend == "gguf" and model:
             try:
-                # 1. Close internal pointers
                 if hasattr(model, "close"):
                     model.close()
                 elif hasattr(model, "_model") and hasattr(model._model, "close"):
                     model._model.close()
-                
-                # 2. Break references
                 keys = list(model_dict.keys())
                 for k in keys:
                     del model_dict[k]
-                
-                # 3. Explicit delete
                 del model
             except Exception as e:
                 logger.debug(f"GGUF cleanup warning: {e}")
 
     mm.soft_empty_cache()
-    
     if torch.cuda.is_available():
         try:
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
         except Exception:
             pass
-            
     gc.collect()
+
+
+class Qwen3VL_GenerationConfig:
+    """
+    Advanced configuration node for controlling model generation stochasticity.
+    Connects between Model Loader and Run Node.
+    """
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "temperature": ("FLOAT", {"default": 0.6, "min": 0.0, "max": 2.0, "step": 0.05, "tooltip": "Higher = Creative, Lower = Deterministic"}),
+                "top_p": ("FLOAT", {"default": 0.9, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Nucleus sampling probability"}),
+                "repetition_penalty": ("FLOAT", {"default": 1.2, "min": 1.0, "max": 2.0, "step": 0.05, "tooltip": "Penalty for repeating tokens"}),
+                "num_beams": ("INT", {"default": 1, "min": 1, "max": 5, "tooltip": "Beam search (Transformers Only). 1 = Standard"}),
+            }
+        }
+
+    RETURN_TYPES = ("QWEN3_GEN_CONFIG",)
+    RETURN_NAMES = ("gen_config",)
+    FUNCTION = "create_config"
+    CATEGORY = "Qwen3-VL"
+
+    def create_config(self, temperature: float, top_p: float, repetition_penalty: float, num_beams: int) -> Tuple[Dict[str, Any]]:
+        """Packages generation parameters into a dictionary."""
+        return ({
+            "temperature": temperature,
+            "top_p": top_p,
+            "repetition_penalty": repetition_penalty,
+            "num_beams": num_beams,
+        },)
 
 
 class Qwen3VL_Base:
@@ -257,10 +247,6 @@ class Qwen3VL_Base:
         prompt_mode: str,
         kwargs: Dict[str, Any]
     ) -> str:
-        """
-        Constructs the prompt string based on the mode.
-        modes: 'prepend_custom' (default) or 'overwrite'
-        """
         # 1. Handle Overwrite immediately
         if prompt_mode == "overwrite" and custom_prompt and custom_prompt.strip():
             return custom_prompt.strip()
@@ -292,38 +278,47 @@ class Qwen3VL_Base:
         return base_prompt
 
     def _tensor_to_base64_uri(self, image_tensor: torch.Tensor) -> str:
-        """
-        Converts a ComfyUI Image Tensor to a Data URI string entirely in memory.
-        """
         if image_tensor.dim() != 3:
              raise ValueError(f"Expected [H, W, C] tensor, got shape {image_tensor.shape}")
         
-        # Fast Numpy Conversion (H, W, C) -> UInt8
         arr = np.clip(255.0 * image_tensor.cpu().numpy(), 0, 255).astype(np.uint8)
-        
-        # Handle Grayscale
         if arr.shape[-1] == 1:
             arr = arr.squeeze(-1)
             
         img = Image.fromarray(arr)
-        
-        # In-Memory Save
         buffered = io.BytesIO()
         img.save(buffered, format="PNG", compress_level=1)
-        
-        # Encode
         b64_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
         return f"data:image/png;base64,{b64_str}"
 
     def run_inference_transformers(
-        self, model_dict: Dict, messages: List[Dict], max_new_tokens: int
+        self, model_dict: Dict, messages: List[Dict], max_new_tokens: int, gen_config: Optional[Dict] = None
     ) -> str:
-        """Inference logic for Transformers backend using in-memory data."""
+        """Inference logic for Transformers backend with dynamic generation config."""
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError("Transformers library not available.")
             
         model = model_dict["model"]
         processor = model_dict["processor"]
+
+        # Default Config if None provided
+        if gen_config is None:
+            gen_config = {"temperature": 0.6, "top_p": 0.9, "repetition_penalty": 1.2, "num_beams": 1}
+
+        # Prepare arguments
+        do_sample = gen_config["temperature"] > 0
+        
+        gen_kwargs = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": do_sample,
+            "repetition_penalty": gen_config["repetition_penalty"],
+            "num_beams": gen_config["num_beams"],
+            "use_cache": True,
+        }
+        
+        if do_sample:
+            gen_kwargs["temperature"] = gen_config["temperature"]
+            gen_kwargs["top_p"] = gen_config["top_p"]
 
         try:
             device = next(model.parameters()).device
@@ -336,7 +331,6 @@ class Qwen3VL_Base:
             text_input = processor.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )
-            
             image_inputs, video_inputs = process_vision_info(messages)
 
             inputs = processor(
@@ -348,13 +342,7 @@ class Qwen3VL_Base:
             ).to(model.device)
 
             with torch.inference_mode():
-                generated_ids = model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    repetition_penalty=1.0,
-                    use_cache=True,
-                )
+                generated_ids = model.generate(**inputs, **gen_kwargs)
 
             generated_ids_trimmed = [
                 out_ids[len(in_ids) :]
@@ -380,15 +368,26 @@ class Qwen3VL_Base:
             raise RuntimeError(f"Transformers Inference failed: {str(e)}") from e
 
     def run_inference_gguf(
-        self, model_dict: Dict, messages: List[Dict], max_new_tokens: int
+        self, model_dict: Dict, messages: List[Dict], max_new_tokens: int, gen_config: Optional[Dict] = None
     ) -> str:
-        """Inference logic for GGUF backend using in-memory data."""
+        """Inference logic for GGUF backend with dynamic generation config."""
         if not LLAMA_CPP_AVAILABLE:
             raise ImportError("llama-cpp-python not available.")
 
         model = model_dict["model"]
         
-        # Transform messages for llama-cpp compatibility
+        # Default Config
+        if gen_config is None:
+            gen_config = {"temperature": 0.6, "top_p": 0.9, "repetition_penalty": 1.2, "num_beams": 1}
+
+        # GGUF Mapping
+        inference_kwargs = {
+            "max_tokens": max_new_tokens,
+            "temperature": gen_config["temperature"],
+            "top_p": gen_config["top_p"],
+            "repeat_penalty": gen_config["repetition_penalty"],
+        }
+
         openai_messages = []
         for msg in messages:
             role = msg["role"]
@@ -413,9 +412,7 @@ class Qwen3VL_Base:
         try:
             response = model.create_chat_completion(
                 messages=openai_messages,
-                max_tokens=max_new_tokens,
-                temperature=0.0, 
-                repeat_penalty=1.0,
+                **inference_kwargs
             )
             
             result = response["choices"][0]["message"]["content"]
@@ -429,32 +426,19 @@ class Qwen3VL_Base:
 
 
 class Qwen3VL_ModelLoader:
-    """
-    Loads Qwen3-VL models.
-    Supports standard HuggingFace folders AND .gguf single files.
-    Only loads models detected locally.
-    """
+    """Loads Qwen3-VL models (HF + GGUF)."""
 
     @classmethod
     def INPUT_TYPES(cls):
         model_options = set()
-
-        # 1. Local Directory Scan (Actual files present)
         if MODEL_DIRECTORY.exists():
             for item in MODEL_DIRECTORY.iterdir():
-                if item.is_dir():
-                    # Filter out .cache folder
-                    if item.name == ".cache":
-                        continue
+                if item.is_dir() and item.name != ".cache":
                     model_options.add(item.name)
-                elif item.is_file() and item.suffix.lower() == ".gguf":
-                    if "mmproj" not in item.name.lower():
-                        model_options.add(item.name)
+                elif item.is_file() and item.suffix.lower() == ".gguf" and "mmproj" not in item.name.lower():
+                    model_options.add(item.name)
 
-        # Sort and Listify
         sorted_options = sorted(list(model_options))
-
-        # Fallback if empty
         if not sorted_options:
              sorted_options = ["No models found in VLM folder"]
 
@@ -473,9 +457,6 @@ class Qwen3VL_ModelLoader:
     CATEGORY = "Qwen3-VL"
 
     def _find_mmproj(self, model_path: Path) -> Optional[str]:
-        """
-        Detects mmproj files using Fuzzy Matching (SequenceMatcher).
-        """
         parent = model_path.parent
         candidates = [p for p in parent.glob("*mmproj*.gguf") if p.is_file()]
         
@@ -489,30 +470,22 @@ class Qwen3VL_ModelLoader:
         for cand in candidates:
             cand_name = cand.name.lower()
             ratio = difflib.SequenceMatcher(None, model_name, cand_name).ratio()
-            
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_candidate = cand
 
         if best_candidate and best_ratio > 0.3:
             return str(best_candidate)
-            
         return None
     
     def load_model(self, model: str, quantization: str, attention: str, gpu_layers_gguf: int):
-        """Unified model loader with strictly linear dispatch logic."""
-        
         if model == "No models found in VLM folder":
-            raise FileNotFoundError("No models found in 'models/VLM'. Please download a Qwen-VL model manually.")
+            raise FileNotFoundError("No models found in 'models/VLM'.")
 
-        # 1. HF Repo ID or Remote (Contains slash)
         if "/" in model:
              return self.load_model_transformers(model, quantization, attention)
         
-        # 2. Local Path check
         local_path = MODEL_DIRECTORY / model
-        
-        # 3. GGUF File Logic
         is_gguf = model.lower().endswith(".gguf")
         
         if is_gguf:
@@ -521,7 +494,6 @@ class Qwen3VL_ModelLoader:
             else:
                  raise FileNotFoundError(f"GGUF file '{model}' not found locally.")
             
-        # 4. Fallback: Local Transformers Folder
         return self.load_model_transformers(model, quantization, attention)
 
     def load_model_gguf(self, model_path: Path, gpu_layers: int):
@@ -529,14 +501,9 @@ class Qwen3VL_ModelLoader:
             raise ImportError("Cannot load GGUF. 'llama-cpp-python' is not installed.")
 
         mmproj_path = self._find_mmproj(model_path)
-        
         if not mmproj_path:
-            logger.error(f"❌ CRITICAL: No 'mmproj' file found for {model_path.name}.")
-            logger.error("Please download the 'mmproj-...' file from the HuggingFace repo and place it next to the model.")
             raise FileNotFoundError(f"Missing vision projector (mmproj) for {model_path.name}")
-        else:
-            logger.info(f"✅ Auto-detected Vision Projector: {Path(mmproj_path).name}")
-
+        
         if QwenChatHandler is None:
              raise ImportError("Installed 'llama-cpp-python' does not support Qwen-VL ChatHandler.")
         
@@ -555,18 +522,9 @@ class Qwen3VL_ModelLoader:
                 verbose=True
             )
         except Exception as e:
-            import llama_cpp
-            version_msg = f" (llama-cpp-python version: {llama_cpp.__version__})"
-            raise RuntimeError(f"GGUF Load Error: {e}{version_msg}") from e
+            raise RuntimeError(f"GGUF Load Error: {e}") from e
 
-        return (
-            {
-                "model": llm,
-                "type": "gguf",
-                "model_path": str(model_path),
-                "backend": "gguf"
-            },
-        )
+        return ({"model": llm, "type": "gguf", "model_path": str(model_path), "backend": "gguf"},)
 
     def load_model_transformers(self, model: str, quantization: str, attention: str):
         if not TRANSFORMERS_AVAILABLE:
@@ -576,21 +534,17 @@ class Qwen3VL_ModelLoader:
             model_name = model.rsplit("/", 1)[-1]
         else:
             model_name = model
-
         model_path = MODEL_DIRECTORY / model_name
 
         if not model_path.exists():
-            raise FileNotFoundError(f"Local model folder '{model_name}' not found. Auto-download is disabled.")
+            raise FileNotFoundError(f"Local model folder '{model_name}' not found.")
 
-        # --- AUTO-ATTENTION SAFEGUARD ---
         if attention == "auto":
             try:
                 from transformers.utils import is_flash_attn_2_available
                 if not is_flash_attn_2_available():
-                    logger.info("⚠️ Flash Attention 2 not detected. Forcing 'sdpa' (Scaled Dot Product) to prevent crash.")
                     attention = "sdpa"
             except Exception:
-                # Safe fallback if verification fails
                 attention = "sdpa"
 
         quant_config = None
@@ -612,21 +566,11 @@ class Qwen3VL_ModelLoader:
         except Exception as e:
             raise RuntimeError(f"Transformers Load Error: {e}") from e
 
-        return (
-            {
-                "model": loaded_model,
-                "processor": processor,
-                "model_path": str(model_path),
-                "type": "transformers",
-                "backend": "transformers"
-            },
-        )
+        return ({"model": loaded_model, "processor": processor, "model_path": str(model_path), "type": "transformers", "backend": "transformers"},)
 
 
 class Qwen3VL_Run(Qwen3VL_Base):
-    """
-    Single Image/Video Inference Node.
-    """
+    """Single Image/Video Inference Node with optional Advanced Config."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -639,26 +583,23 @@ class Qwen3VL_Run(Qwen3VL_Base):
                     {"default": "long"},
                 ),
                 "custom_prompt": ("STRING", {"multiline": True}),
-                # Toggle for prompt handling
                 "prompt_mode": (["prepend_custom", "overwrite"], {"default": "prepend_custom"}),
-                # Updated default System Prompt
                 "system_prompt": (
                     "STRING",
                     {
-                        "default": "You are a masterful assistent and you describe images in natural language. Write the descriptions in one fluid paragraph", 
+                        "default": "You are a masterful assistant and you describe images in natural language. Write the descriptions in one fluid paragraph.", 
                         "multiline": True
                     },
                 ),
-                # New Input Tags
                 "initial_tags": ("STRING", {"multiline": True, "default": ""}),
                 "end_tags": ("STRING", {"multiline": True, "default": ""}),
-                
                 "max_new_tokens": ("INT", {"default": 512, "min": 1, "max": 4096}),
                 "seed": ("INT", {"default": 1}),
                 "unload_when_done": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "image": ("IMAGE",),
+                "generation_config": ("QWEN3_GEN_CONFIG",),
                 **cls.get_shared_options(),
             },
         }
@@ -681,9 +622,9 @@ class Qwen3VL_Run(Qwen3VL_Base):
         seed,
         unload_when_done,
         image=None,
+        generation_config=None,
         **kwargs,
     ):
-        # Build prompt using the new mode toggle
         user_prompt = self.build_prompt_text(
             caption_type, caption_length, custom_prompt, prompt_mode, kwargs
         )
@@ -693,7 +634,6 @@ class Qwen3VL_Run(Qwen3VL_Base):
             if image is not None:
                 batch_size = image.shape[0]
                 for i in range(batch_size):
-                    # Convert to Base64 in Memory - No Disk I/O
                     b64_uri = self._tensor_to_base64_uri(image[i])
                     content.append({"type": "image", "image": b64_uri})
 
@@ -704,44 +644,35 @@ class Qwen3VL_Run(Qwen3VL_Base):
                 {"role": "user", "content": content},
             ]
 
-            # --- Dispatch Logic ---
             backend = model_dict.get("backend", "transformers")
             
             if backend == "gguf":
-                result = self.run_inference_gguf(model_dict, messages, max_new_tokens)
+                result = self.run_inference_gguf(model_dict, messages, max_new_tokens, generation_config)
             else:
-                result = self.run_inference_transformers(model_dict, messages, max_new_tokens)
+                result = self.run_inference_transformers(model_dict, messages, max_new_tokens, generation_config)
 
-            # --- Post-Processing Tags ---
             parts = []
             if initial_tags and initial_tags.strip():
                 parts.append(initial_tags.strip())
-            
             parts.append(result)
-            
             if end_tags and end_tags.strip():
                 parts.append(end_tags.strip())
             
-            # Join with space, ensuring no double spaces if tags are empty
             final_output = " ".join(parts)
-
             return (final_output, user_prompt, system_prompt)
 
         finally:
             clean_vram(model_dict, unload=unload_when_done)
 
 class Qwen3VL_Run_Simple(Qwen3VL_Base):
-    """
-    Single Image/Video Inference Node (Simplified).
-    Removed optional boolean toggles.
-    """
+    """Simplified Inference Node."""
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "model_dict": ("QWEN3_VL_MODEL",),
-                "image": ("IMAGE",),  # Moved to required
+                "image": ("IMAGE",),
                 "caption_type": (list(CAPTION_TYPE_MAP.keys()), {"default": "Descriptive (Standard)"}),
                 "caption_length": (
                     ["any", "short", "long"] + [str(i) for i in range(12, 512, 12)],
@@ -758,11 +689,13 @@ class Qwen3VL_Run_Simple(Qwen3VL_Base):
                 ),
                 "initial_tags": ("STRING", {"multiline": True, "default": ""}),
                 "end_tags": ("STRING", {"multiline": True, "default": ""}),
-                
                 "max_new_tokens": ("INT", {"default": 512, "min": 1, "max": 4096}),
                 "seed": ("INT", {"default": 1}),
                 "unload_when_done": ("BOOLEAN", {"default": False}),
             },
+            "optional": {
+                "generation_config": ("QWEN3_GEN_CONFIG",),
+            }
         }
 
     RETURN_TYPES = ("STRING", "STRING", "STRING")
@@ -783,10 +716,10 @@ class Qwen3VL_Run_Simple(Qwen3VL_Base):
         max_new_tokens,
         seed,
         unload_when_done,
+        generation_config=None,
     ):
-        # 1. Build Text Prompt
         user_prompt = self.build_prompt_text(
-            caption_type, caption_length, custom_prompt, prompt_mode
+            caption_type, caption_length, custom_prompt, prompt_mode, {}
         )
         
         try:
@@ -794,7 +727,6 @@ class Qwen3VL_Run_Simple(Qwen3VL_Base):
             if image is not None:
                 batch_size = image.shape[0]
                 for i in range(batch_size):
-                    # Convert to Base64 in Memory - No Disk I/O
                     b64_uri = self._tensor_to_base64_uri(image[i])
                     content.append({"type": "image", "image": b64_uri})
 
@@ -805,27 +737,21 @@ class Qwen3VL_Run_Simple(Qwen3VL_Base):
                 {"role": "user", "content": content},
             ]
 
-            # --- Dispatch Logic ---
             backend = model_dict.get("backend", "transformers")
             
             if backend == "gguf":
-                result = self.run_inference_gguf(model_dict, messages, max_new_tokens)
+                result = self.run_inference_gguf(model_dict, messages, max_new_tokens, generation_config)
             else:
-                result = self.run_inference_transformers(model_dict, messages, max_new_tokens)
+                result = self.run_inference_transformers(model_dict, messages, max_new_tokens, generation_config)
 
-            # --- Post-Processing Tags ---
             parts = []
             if initial_tags and initial_tags.strip():
                 parts.append(initial_tags.strip())
-            
             parts.append(result)
-            
             if end_tags and end_tags.strip():
                 parts.append(end_tags.strip())
             
-            # Join with space, ensuring no double spaces if tags are empty
             final_output = " ".join(parts)
-
             return (final_output, user_prompt, system_prompt)
 
         finally:
@@ -834,12 +760,14 @@ class Qwen3VL_Run_Simple(Qwen3VL_Base):
 
 NODE_CLASS_MAPPINGS = {
     "Qwen3VL_ModelLoader": Qwen3VL_ModelLoader,
+    "Qwen3VL_GenerationConfig": Qwen3VL_GenerationConfig,
     "Qwen3VL_Run": Qwen3VL_Run,
     "Qwen3VL_Run_Simple": Qwen3VL_Run_Simple,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Qwen3VL_ModelLoader": "RM-Qwen3-VL Loader (GGUF + HF)",
+    "Qwen3VL_GenerationConfig": "RM-Qwen3-VL Config",
     "Qwen3VL_Run": "RM-Qwen3-VL Run",
     "Qwen3VL_Run_Simple": "RM-Qwen3-VL Run Simple",
 }
