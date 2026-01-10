@@ -90,7 +90,48 @@ class Qwen_DateGenerator:
             date_str = datetime.now().strftime("%Y-%m-%d")
         return (date_str,)
 
+class Qwen_Text:
+    """
+    A streamlined primitive node for handling raw text input.
+    
+    Acts as a direct pass-through for string data, allowing users to 
+    input multiline text via the ComfyUI widget interface.
+    """
 
+    @classmethod
+    def INPUT_TYPES(cls) -> Dict[str, Any]:
+        """
+        Defines the input parameters for the node.
+        """
+        return {
+            "required": {
+                "input_text": (
+                    "STRING",
+                    {
+                        "default": "", 
+                        "multiline": True, 
+                        "forceInput": False # Set to True if you want to force node connection
+                    }
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("text",)
+    FUNCTION = "simple_text"
+    CATEGORY = "VLM Nodes/Text"
+
+    def simple_text(self, input_text: str) -> Tuple[str]:
+        """
+        Passes the input text through to the output.
+
+        Args:
+            input_text (str): The raw string from the widget.
+
+        Returns:
+            Tuple[str]: The unmodified input string.
+        """
+        return (input_text,)
 
 class Qwen_TextConcatenate:
     """
@@ -476,6 +517,7 @@ class Qwen_ImageSave:
 
 NODE_CLASS_MAPPINGS = {
     "Qwen_DateGenerator": Qwen_DateGenerator,
+    "Qwen_Text": Qwen_Text,
     "Qwen_TextConcatenate": Qwen_TextConcatenate,
     "Qwen_TextSave": Qwen_TextSave,
     "Qwen_ImageSave": Qwen_ImageSave,
@@ -483,6 +525,7 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Qwen_DateGenerator": "RM-Date Generator",
+    "Qwen_Text": "RM-Textbox",
     "Qwen_TextConcatenate": "RM-Text Concatenate",
     "Qwen_TextSave": "RM-Text Save",
     "Qwen_ImageSave": "RM-Image Save",
